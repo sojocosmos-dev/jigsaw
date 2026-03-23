@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>조각조각 모둠 활동</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 커스텀 스타일 (수직 텍스트 등) */
+        .writing-vertical-rl {
+            writing-mode: vertical-rl;
+        }
+        /* 입력 폼 포커스 시 아웃라인 제거 */
+        input:focus {
+            outline: none;
+        }
+        /* 앱 기본 폰트 (시스템 폰트) */
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col font-sans">
+
+    <!-- 앱 전체가 렌더링될 컨테이너 -->
+    <div id="app" class="flex-1 flex flex-col"></div>
+
+    <script>
+        // ==========================================
+        // 1. 상태 관리 (State)
+        // ==========================================
+        const PRESET_COLORS = [
+            { id: 'red', name: '빨강', bg: 'bg-red-200', border: 'border-red-400', text: 'text-red-900', badge: 'bg-red-500' },
+            { id: 'orange', name: '주황', bg: 'bg-orange-200', border: 'border-orange-400', text: 'text-orange-900', badge: 'bg-orange-500' },
+            { id: 'yellow', name: '노랑', bg: 'bg-yellow-200', border: 'border-yellow-400', text: 'text-yellow-900', badge: 'bg-yellow-500' },
+            { id: 'green', name: '초록', bg: 'bg-green-200', border: 'border-green-400', text: 'text-green-900', badge: 'bg-green-500' },
+            { id: 'blue', name: '파랑', bg: 'bg-blue-200', border: 'border-blue-400', text: 'text-blue-900', badge: 'bg-blue-500' },
+            { id: 'purple', name: '보라', bg: 'bg-purple-200', border: 'border-purple-400', text: 'text-purple-900', badge: 'bg-purple-500' },
+            { id: 'pink', name: '분홍', bg: 'bg-pink-200', border: 'border-pink-400', text: 'text-pink-900', badge: 'bg-pink-500' },
+            { id: 'teal', name: '청록', bg: 'bg-teal-200', border: 'border-teal-400', text: 'text-teal-900', badge: 'bg-teal-500' },
+            { id: 'lime', name: '연두', bg: 'bg-lime-200', border: 'border-lime-400', text: 'text-lime-900', badge: 'bg-lime-500' },
+            { id: 'sky', name: '하늘', bg: 'bg-sky-200', border: 'border-sky-400', text: 'text-sky-900', badge: 'bg-sky-500' },
+            { id: 'indigo', name: '남색', bg: 'bg-indigo-200', border: 'border-indigo-400', text: 'text-indigo-900', badge: 'bg-indigo-500' },
+            { id: 'rose', name: '장미', bg: 'bg-rose-200', border: 'border-rose-400', text: 'text-rose-900', badge: 'bg-rose-500' },
+            { id: 'emerald', name: '에메랄드', bg: 'bg-emerald-200', border: 'border-emerald-400', text: 'text-emerald-900', badge: 'bg-emerald-500' },
+            { id: 'amber', name: '호박', bg: 'bg-amber-200', border: 'border-amber-400', text: 'text-amber-900', badge: 'bg-amber-500' },
+            { id: 'fuchsia', name: '자홍', bg: 'bg-fuchsia-200', border: 'border-fuchsia-400', text: 'text-fuchsia-900', badge: 'bg-fuchsia-500' },
+            { id: 'cyan', name: '시안', bg: 'bg-cyan-200', border: 'border-cyan-400', text: 'text-cyan-900', badge: 'bg-cyan-500' },
+            { id: 'violet', name: '바이올렛', bg: 'bg-violet-200', border: 'border-violet-400', text: 'text-violet-900', badge: 'bg-violet-500' },
+            { id: 'stone', name: '회갈', bg: 'bg-stone-200', border: 'border-stone-400', text: 'text-stone-900', badge: 'bg-stone-500' },
+            { id: 'slate', name: '슬레이트', bg: 'bg-slate-200', border: 'border-slate-400', text: 'text-slate-900', badge: 'bg-slate-500' },
+            { id: 'zinc', name: '아연', bg: 'bg-zinc-200', border: 'border-zinc-400', text: 'text-zinc-900', badge: 'bg-zinc-500' },
+        ];
+
+        const state = {
+            view: 'settings', // 'settings' | 'board'
+            teamCount: 6,
+            teams: [],
+            direction: 'forward',
+            customStudentNames: {},
+            lessonTitle: '',
+            teamSlots: {},
+            selectedMovers: [1],
+            fallbackMovers: {},
+            moveHistoryCount: 0,
+            isFocusMode: false,
+            savedPresets: [],
+            presetNameInput: '',
+            selectedPresetId: ''
+        };
+
+        // ==========================================
+        // 2. 핵심 로직 (Logic)
+        // ==========================================
+
+        function syncTeams() {
+            if (state.teamCount > state.teams.length) {
+                for (let i = state.teams.length; i < state.teamCount; i++) {
+                    const colorObj = PRESET_COLORS[i % PRESET_COLORS.length];
+                    state.teams.push({
+                        id: i,
+                        name: `${colorObj.name}팀`,
+                        colorObj: colorObj,
+                        size: 4
+                    });
+                }
+            } else if (state.teamCount < state.teams.length) {
+                state.teams.splice(state.teamCount);
+            }
+        }
+
+        function generateInitialSlots() {
+            const slots = {};
+            state.teams.forEach(team => {
+                slots[team.id] = Array.from({ length: team.size }).map((_, sIdx) => {
+                    const studentId = `t${team.id}-s${sIdx + 1}`;
+                    return {
+                        student: {
+                            id: studentId,
+                            originalTeamId: team.id,
+                            originalNumber: sIdx + 1,
+                            name: state.customStudentNames[studentId] || `${sIdx + 1}번 학생`,
+                            colorObj: team.colorObj
+                        }
+                    };
+                });
+            });
+            return slots;
+        }
+
+        function calcFallbackMovers() {
+            if (state.view !== 'board' || Object.keys(state.teamSlots).length === 0) return;
+
+            const minTeamSize = Math.min(...Object.values(state.teamSlots).map(slots => slots.length));
+            const newFallbacks = {};
+            
+            const outOfBounds = state.selectedMovers.filter(m => m > minTeamSize);
+            
+            if (outOfBounds.length > 0) {
+                const availableFallbacks = Array.from({ length: minTeamSize }, (_, i) => i + 1)
+                    .filter(num => !state.selectedMovers.includes(num));
+                
+                let currentAvailable = [...availableFallbacks];
+                outOfBounds.forEach(m => {
+                    if (currentAvailable.length > 0) {
+                        const randIdx = Math.floor(Math.random() * currentAvailable.length);
+                        newFallbacks[m] = currentAvailable[randIdx];
+                        currentAvailable.splice(randIdx, 1);
+                    } else {
+                        newFallbacks[m] = 1;
+                    }
+                });
+            }
+            state.fallbackMovers = newFallbacks;
+        }
+
+        function executeMove() {
+            if (state.selectedMovers.length === 0) return;
+
+            const teamIds = state.teams.map(t => t.id);
+            const newSlots = JSON.parse(JSON.stringify(state.teamSlots)); // Deep copy
+
+            state.selectedMovers.forEach(mover => {
+                const movingIndices = {}; 
+                Object.keys(state.teamSlots).forEach(teamId => {
+                    const slots = state.teamSlots[teamId];
+                    if (mover <= slots.length) {
+                        movingIndices[teamId] = mover - 1;
+                    } else {
+                        movingIndices[teamId] = (state.fallbackMovers[mover] || 1) - 1;
+                    }
+                });
+
+                for (let i = 0; i < teamIds.length; i++) {
+                    const currentTeamId = teamIds[i];
+                    let targetTeamIndex = state.direction === 'forward' 
+                        ? (i + 1) % teamIds.length 
+                        : (i - 1 + teamIds.length) % teamIds.length;
+                    const targetTeamId = teamIds[targetTeamIndex];
+
+                    const currentSlotIndex = movingIndices[currentTeamId];
+                    const targetSlotIndex = movingIndices[targetTeamId];
+
+                    newSlots[targetTeamId][targetSlotIndex].student = state.teamSlots[currentTeamId][currentSlotIndex].student;
+                }
+            });
+
+            state.teamSlots = newSlots;
+            state.moveHistoryCount++;
+            renderApp();
+        }
+
+        // --- DB (LocalStorage) 로직 ---
+        function loadPresets() {
+            try {
+                const localData = localStorage.getItem('jigsaw_presets');
+                state.savedPresets = localData ? JSON.parse(localData) : [];
+            } catch (e) { console.error(e); }
+        }
+
+        function savePreset() {
+            if (!state.presetNameInput.trim()) {
+                alert("저장할 설정의 이름을 입력해주세요.");
+                return;
+            }
+            const newPreset = {
+                id: Date.now().toString(),
+                title: state.presetNameInput.trim(),
+                date: new Date().toLocaleDateString(),
+                data: {
+                    teamCount: state.teamCount,
+                    teams: JSON.parse(JSON.stringify(state.teams)),
+                    customStudentNames: JSON.parse(JSON.stringify(state.customStudentNames)),
+                    lessonTitle: state.lessonTitle
+                }
+            };
+            const updated = [...state.savedPresets.filter(p => p.title !== newPreset.title), newPreset];
+            state.savedPresets = updated;
+            localStorage.setItem('jigsaw_presets', JSON.stringify(updated));
+            state.presetNameInput = '';
+            state.selectedPresetId = newPreset.id;
+            renderApp();
+        }
+
+        function applyPreset() {
+            const preset = state.savedPresets.find(p => p.id === state.selectedPresetId);
+            if (preset && preset.data) {
+                state.teamCount = preset.data.teamCount;
+                state.teams = preset.data.teams;
+                state.customStudentNames = preset.data.customStudentNames || {};
+                state.lessonTitle = preset.data.lessonTitle || '';
+                renderApp();
+            }
+        }
+
+        // ==========================================
+        // 3. 글로벌 이벤트 핸들러 (UI 연동)
+        // ==========================================
+        window.handleStart = () => {
+            state.teamSlots = generateInitialSlots();
+            state.moveHistoryCount = 0;
+            state.selectedMovers = [1];
+            state.fallbackMovers = {};
+            state.view = 'board';
+            calcFallbackMovers();
+            renderApp();
+        };
+
+        window.handleResetBoard = () => {
+            state.teamSlots = generateInitialSlots();
+            state.moveHistoryCount = 0;
+            renderApp();
+        };
+
+        window.toggleFocusMode = () => {
+            state.isFocusMode = !state.isFocusMode;
+            renderApp();
+        };
+
+        window.setView = (v) => {
+            state.view = v;
+            renderApp();
+        };
+
+        window.toggleMover = (num) => {
+            const isSelected = state.selectedMovers.includes(num);
+            if (isSelected && state.selectedMovers.length > 1) {
+                state.selectedMovers = state.selectedMovers.filter(m => m !== num);
+            } else if (!isSelected) {
+                state.selectedMovers.push(num);
+                state.selectedMovers.sort((a,b)=>a-b);
+            }
+            calcFallbackMovers();
+            renderApp();
+        };
+
+        // UI에서 즉각적인 반응이 필요한 부분들 (재랜더링 최소화)
+        window.updateLessonTitle = (val) => { state.lessonTitle = val; renderPreviewOnly(); };
+        window.updatePresetName = (val) => { state.presetNameInput = val; };
+        window.selectPreset = (val) => { state.selectedPresetId = val; renderApp(); };
+        
+        window.updateTeamCount = (val) => { 
+            state.teamCount = Math.max(2, parseInt(val) || 2); 
+            syncTeams(); 
+            renderApp(); 
+        };
+        
+        window.updateDirection = (dir) => { 
+            state.direction = dir; 
+            renderApp(); 
+        };
+
+        window.updateTeamName = (teamIdx, val) => {
+            state.teams[teamIdx].name = val;
+            renderPreviewOnly();
+        };
+
+        window.updateTeamSize = (teamIdx, delta) => {
+            state.teams[teamIdx].size = Math.max(1, Math.min(10, state.teams[teamIdx].size + delta));
+            renderApp(); // 구조 변경이므로 전체 렌더링
+        };
+
+        window.updateStudentName = (teamId, studentIndex, val) => {
+            state.customStudentNames[`t${teamId}-s${studentIndex}`] = val;
+            renderPreviewOnly();
+        };
+
+
+        // ==========================================
+        // 4. 렌더링 함수군 (Rendering)
+        // ==========================================
+        function refreshIcons() {
+            lucide.createIcons();
+        }
+
+        // 설정 화면의 "오른쪽 미리보기" 부분만 업데이트 (입력 중 포커스 유지용)
+        function renderPreviewOnly() {
+            const previewEl = document.getElementById('settings-preview-panel');
+            if (previewEl) {
+                previewEl.innerHTML = buildSettingsPreviewHTML();
+            }
+        }
+
+        function renderApp() {
+            const app = document.getElementById('app');
+            if (state.view === 'settings') {
+                app.innerHTML = buildSettingsHTML();
+            } else {
+                app.innerHTML = buildBoardHTML();
+            }
+            refreshIcons();
+        }
+
+        // --- HTML 빌더: 설정 화면 ---
+        function buildSettingsPreviewHTML() {
+            const previewSlots = generateInitialSlots();
+            const totalStudents = state.teams.reduce((acc, t) => acc + (t.size || 0), 0);
+            
+            // 토탈 학생수 업데이트 (DOM 직접 제어)
+            const totalEl = document.getElementById('total-students-display');
+            if(totalEl) totalEl.innerText = `총 ${totalStudents}명`;
+
+            return `
+                <div class="flex-1 bg-white rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center p-4 relative overflow-hidden">
+                    <div class="w-full h-full relative border-4 border-gray-200 bg-blue-50 rounded-lg p-6 flex flex-col">
+                        <div class="absolute top-0 left-[10%] right-[10%] bg-green-600 rounded-b-lg flex flex-col items-center justify-center text-white p-1.5 shadow-sm z-10 min-h-[24px]">
+                            <span class="text-[9px] font-bold text-white/80 leading-none">칠판 (앞)</span>
+                            ${state.lessonTitle ? `<span class="text-[10px] font-black mt-1 truncate w-full text-center px-2">${state.lessonTitle}</span>` : ''}
+                        </div>
+                        <div class="flex-1 grid grid-cols-2 lg:grid-cols-3 gap-4 mt-8 place-content-start overflow-y-auto">
+                            ${state.teams.map(team => `
+                                <div class="rounded-lg p-2 border-2 ${team.colorObj.bg} ${team.colorObj.border} shadow-sm">
+                                    <div class="text-center font-bold text-xs mb-2 ${team.colorObj.text}">${team.name}</div>
+                                    <div class="grid grid-cols-2 gap-1">
+                                        ${previewSlots[team.id].map(slot => `
+                                            <div class="bg-white/70 aspect-square rounded flex items-center justify-center text-[10px] sm:text-xs font-bold text-gray-700 text-center px-1 break-keep leading-tight">
+                                                ${slot.student.name}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function buildSettingsHTML() {
+            const totalStudents = state.teams.reduce((acc, t) => acc + (t.size || 0), 0);
+
+            return `
+            <div class="min-h-screen bg-gray-50 flex flex-col items-center py-8 px-4 w-full">
+                <!-- 타이틀 -->
+                <div class="mb-6 text-center flex flex-col items-center">
+                    <div class="inline-flex items-center justify-center p-3 bg-indigo-100 rounded-2xl mb-3 shadow-inner">
+                        <i data-lucide="puzzle" class="w-8 h-8 text-indigo-600"></i>
+                    </div>
+                    <h1 class="text-4xl md:text-5xl font-black text-indigo-900 tracking-tight mb-2 drop-shadow-sm">조각조각 모둠 활동</h1>
+                    <h2 class="text-base md:text-lg font-bold text-gray-500 tracking-widest flex items-center gap-1 justify-center">
+                        직소 모형 자리 배치 도구 <i data-lucide="database" class="w-4 h-4 ml-1 opacity-50"></i>
+                    </h2>
+                </div>
+
+                <div class="max-w-5xl w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col md:flex-row">
+                    <!-- 왼쪽: 컨트롤 패널 -->
+                    <div class="w-full md:w-1/3 bg-white border-r border-gray-100 p-8 flex flex-col">
+                        <h2 class="text-xl font-bold flex items-center gap-2 mb-6 text-gray-800">
+                            <i data-lucide="settings" class="w-6 h-6 text-indigo-600"></i> 자리 배치 설정
+                        </h2>
+                        
+                        <div class="space-y-6 flex-1 flex flex-col min-h-0">
+                            <!-- 프리셋 영역 -->
+                            <div class="bg-indigo-50 rounded-xl p-4 border border-indigo-100 shadow-sm">
+                                <label class="block text-sm font-black text-indigo-900 mb-3 flex items-center gap-1.5">
+                                    <i data-lucide="folder-open" class="w-4 h-4"></i> 내 학급 관리
+                                </label>
+                                <div class="flex gap-2 mb-3">
+                                    <select onchange="window.selectPreset(this.value)" class="flex-1 text-sm rounded-lg border-gray-300 border bg-white px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700 font-medium">
+                                        <option value="" ${!state.selectedPresetId ? 'selected' : ''} disabled>저장된 학급 선택...</option>
+                                        ${state.savedPresets.map(p => `<option value="${p.id}" ${state.selectedPresetId===p.id?'selected':''}>${p.title} (${p.date})</option>`).join('')}
+                                    </select>
+                                    <button onclick="applyPreset()" ${!state.selectedPresetId ? 'disabled' : ''} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">
+                                        불러오기
+                                    </button>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" value="${state.presetNameInput}" oninput="window.updatePresetName(this.value)" placeholder="예: 3학년 1반 설정" class="flex-1 text-sm rounded-lg border-gray-300 border bg-white px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    <button onclick="savePreset()" class="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm">
+                                        <i data-lucide="save" class="w-4 h-4"></i> 저장
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 목표 및 팀 설정 -->
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">학습 목표 및 활동명 (선택)</label>
+                                <div class="flex items-center bg-gray-50 rounded-lg p-2 border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500">
+                                    <i data-lucide="book-open" class="w-5 h-5 text-gray-400 ml-2 shrink-0"></i>
+                                    <input type="text" value="${state.lessonTitle}" oninput="window.updateLessonTitle(this.value)" placeholder="예: 환경 오염의 원인과 해결 방안 찾기" class="w-full bg-transparent border-none text-base font-bold text-gray-800 ml-2 placeholder-gray-400 focus:outline-none" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">전체 학생 수</label>
+                                <div class="flex items-center bg-gray-50 rounded-lg p-2 border border-gray-200">
+                                    <i data-lucide="users" class="w-5 h-5 text-gray-400 ml-2"></i>
+                                    <div id="total-students-display" class="w-full text-lg text-center font-bold text-indigo-900">총 ${totalStudents}명</div>
+                                    <span class="text-gray-400 text-xs mr-2">(자동 계산)</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">팀(모둠) 수</label>
+                                <div class="flex items-center bg-gray-50 rounded-lg p-2 border border-gray-200">
+                                    <i data-lucide="layout-dashboard" class="w-5 h-5 text-gray-400 ml-2"></i>
+                                    <input type="number" min="2" max="20" value="${state.teamCount}" onchange="window.updateTeamCount(this.value)" class="w-full bg-transparent border-none focus:outline-none text-lg text-center font-semibold text-indigo-900" />
+                                    <span class="text-gray-500 mr-2">팀</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">이동 방향 (순환)</label>
+                                <div class="flex bg-gray-100 rounded-lg p-1">
+                                    <button onclick="window.updateDirection('forward')" class="flex-1 py-2 text-sm font-semibold rounded-md flex justify-center items-center gap-1 transition-colors ${state.direction === 'forward' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}">
+                                        <i data-lucide="arrow-right-circle" class="w-4 h-4"></i> 정방향 (시계)
+                                    </button>
+                                    <button onclick="window.updateDirection('backward')" class="flex-1 py-2 text-sm font-semibold rounded-md flex justify-center items-center gap-1 transition-colors ${state.direction === 'backward' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}">
+                                        <i data-lucide="arrow-left-circle" class="w-4 h-4"></i> 역방향 (반시계)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 팀 및 학생 리스트 (포커스 유지 위해 oninput 사용) -->
+                            <div class="pt-4 border-t border-gray-100 flex-1 flex flex-col min-h-0">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">팀 및 학생 이름 설정 (선택)</label>
+                                <div class="flex-1 overflow-y-auto pr-2 space-y-3">
+                                    ${state.teams.map((t, i) => `
+                                        <div class="p-3 rounded-lg border-2 ${t.colorObj.bg} ${t.colorObj.border}">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                <span class="text-sm font-bold opacity-70 whitespace-nowrap">팀명:</span>
+                                                <input type="text" value="${t.name}" oninput="window.updateTeamName(${i}, this.value)" class="flex-1 text-sm px-2 py-1 rounded bg-white/80 border-transparent focus:border-indigo-500 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-0" />
+                                                <div class="flex items-center bg-white/60 rounded p-1 ml-auto shrink-0 shadow-sm border border-black/5">
+                                                    <button onclick="window.updateTeamSize(${i}, -1)" class="w-5 h-5 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 hover:text-red-500 font-bold leading-none">-</button>
+                                                    <span class="text-xs font-bold px-1 min-w-[32px] text-center">${t.size}명</span>
+                                                    <button onclick="window.updateTeamSize(${i}, 1)" class="w-5 h-5 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 hover:text-indigo-500 font-bold leading-none">+</button>
+                                                </div>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-2">
+                                                ${Array.from({length: t.size}).map((_, sIdx) => {
+                                                    const sId = `t${t.id}-s${sIdx+1}`;
+                                                    const val = state.customStudentNames[sId] || '';
+                                                    return `<input type="text" placeholder="${sIdx+1}번 학생" value="${val}" oninput="window.updateStudentName(${t.id}, ${sIdx+1}, this.value)" class="text-xs px-2 py-1 rounded border border-gray-200/50 bg-white text-center focus:outline-none focus:ring-2 focus:ring-indigo-500" />`
+                                                }).join('')}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onclick="window.handleStart()" class="mt-8 w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg shadow-indigo-200">
+                            <i data-lucide="play" class="w-5 h-5 fill-current"></i> 설정 완료 및 시작
+                        </button>
+                    </div>
+
+                    <!-- 오른쪽: 미리보기 패널 -->
+                    <div class="w-full md:w-2/3 bg-gray-100 p-8 flex flex-col">
+                        <h2 class="text-lg font-bold text-gray-500 mb-4 flex items-center gap-2">미리보기 (배치도)</h2>
+                        <div id="settings-preview-panel" class="flex-1 flex flex-col min-h-0">
+                            ${buildSettingsPreviewHTML()}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // --- HTML 빌더: 보드 화면 ---
+        function buildBoardHTML() {
+            let gridCols = 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+            if (state.teamCount <= 4) gridCols = 'grid-cols-2';
+            else if (state.teamCount <= 6) gridCols = 'grid-cols-2 md:grid-cols-3';
+            else if (state.teamCount <= 8) gridCols = 'grid-cols-3 md:grid-cols-4';
+
+            const maxTeamSize = state.teams.length > 0 ? Math.max(...state.teams.map(t => t.size)) : 0;
+            const hasFallbacks = Object.keys(state.fallbackMovers).length > 0;
+
+            return `
+            <div class="flex-1 flex flex-col relative">
+                <!-- 상단 컨트롤 바 (포커스 모드 아닐 때만) -->
+                ${!state.isFocusMode ? `
+                <div class="bg-white shadow-sm border-b border-gray-200 px-4 py-3 grid grid-cols-1 lg:grid-cols-3 gap-4 items-center z-10 relative">
+                    <div class="flex items-center justify-center lg:justify-start gap-4">
+                        <button onclick="window.setView('settings')" class="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold p-2 rounded-lg transition-all shadow-sm" title="설정으로 돌아가기">
+                            <i data-lucide="settings" class="w-6 h-6"></i>
+                            <span class="text-sm font-bold lg:hidden">설정</span>
+                        </button>
+                        <div class="bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200">
+                            <p class="text-sm text-gray-600 font-medium">현재 이동 횟수: <span class="text-indigo-600 font-bold">${state.moveHistoryCount}회</span></p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-center justify-center text-center">
+                        <h1 class="text-2xl md:text-3xl font-black text-indigo-900 tracking-tight flex items-center gap-2">
+                            <i data-lucide="puzzle" class="w-6 h-6 md:w-8 md:h-8 text-indigo-600"></i> 조각조각 모둠 활동
+                        </h1>
+                        <h2 class="text-xs md:text-sm font-bold text-gray-500 mt-1 tracking-widest">직소 모형 자리 배치 도구</h2>
+                    </div>
+
+                    <div class="flex items-center justify-center lg:justify-end gap-3">
+                        <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200 shadow-sm">
+                            <div class="flex flex-col pl-2 pr-3 border-r border-gray-200">
+                                <span class="text-[10px] font-bold text-gray-500 mb-0.5">이동할 자리 번호</span>
+                                <div class="flex gap-1">
+                                    ${Array.from({length: maxTeamSize}, (_, i) => {
+                                        const num = i + 1;
+                                        const isSelected = state.selectedMovers.includes(num);
+                                        const btnClass = isSelected 
+                                            ? 'bg-indigo-600 text-white shadow-md scale-110' 
+                                            : 'bg-white text-gray-400 border border-gray-300 hover:bg-gray-100';
+                                        return `<button onclick="window.toggleMover(${num})" class="w-6 h-6 md:w-7 md:h-7 rounded-full text-xs font-bold transition-all flex items-center justify-center ${btnClass}">${num}</button>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button onclick="executeMove()" class="ml-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5">
+                            이동 ${state.direction === 'forward' ? '<i data-lucide="arrow-right-circle" class="w-5 h-5"></i>' : '<i data-lucide="arrow-left-circle" class="w-5 h-5"></i>'}
+                        </button>
+
+                        <button onclick="window.handleResetBoard()" class="ml-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-600 font-bold p-2.5 rounded-lg transition-all active:scale-95 shadow-sm" title="초기 자리로 되돌리기">
+                            <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- 안내 메시지 -->
+                ${!state.isFocusMode && hasFallbacks ? `
+                <div class="bg-amber-50 border-b border-amber-200 px-6 py-2 flex justify-center items-center gap-2 text-amber-800 text-sm font-bold shadow-inner">
+                    <i data-lucide="shuffle" class="w-4 h-4 shrink-0"></i>
+                    <span>
+                        ${Object.keys(state.fallbackMovers).join(', ')}번 자리가 없는 모둠은 <span class="text-red-600 text-base font-black mx-0.5">${Object.values(state.fallbackMovers).join(', ')}번</span> 자리에 앉은 학생이 대신 이동합니다!
+                    </span>
+                </div>
+                ` : ''}
+
+                <!-- 메인 교실 영역 -->
+                <div class="flex-1 overflow-auto flex justify-center items-start bg-gray-200 ${state.isFocusMode ? 'p-0' : 'p-4 md:p-8'}">
+                    <div class="relative w-full bg-[#f0f7fa] overflow-hidden transition-all duration-300 ${state.isFocusMode ? 'h-full min-h-screen max-w-none border-0' : 'max-w-6xl rounded-2xl shadow-2xl border-8 border-gray-300'}" style="min-height: ${state.isFocusMode ? '100vh' : '600px'}">
+                        
+                        <!-- 집중 모드 버튼 -->
+                        <button onclick="window.toggleFocusMode()" class="absolute top-4 right-4 z-50 p-2.5 bg-white/80 hover:bg-white backdrop-blur-sm rounded-full shadow-lg border border-gray-200 text-gray-700 hover:text-indigo-600 transition-all active:scale-95">
+                            ${state.isFocusMode ? '<i data-lucide="minimize" class="w-6 h-6"></i>' : '<i data-lucide="maximize" class="w-6 h-6"></i>'}
+                        </button>
+
+                        <!-- 교실 데코레이션 -->
+                        <div class="absolute top-0 left-[10%] right-[10%] md:left-[15%] md:right-[15%] bg-[#89c5a7] border-b-4 border-[#6ba488] flex flex-col items-center justify-center text-white shadow-md z-10 rounded-b-2xl py-2 px-4 min-h-[3rem] transition-all">
+                            <span class="text-xs md:text-sm font-bold text-white/80 tracking-widest mb-0.5">칠 판 (앞)</span>
+                            ${state.lessonTitle ? `<span class="font-black text-lg md:text-xl lg:text-2xl text-center leading-tight break-keep mt-0.5 text-white drop-shadow-sm">${state.lessonTitle}</span>` : ''}
+                        </div>
+                        
+                        <div class="absolute top-1/4 bottom-1/4 left-0 w-12 bg-[#d1e8f2] border-r-4 border-[#b5d5e2] flex items-center justify-center shadow-inner z-0">
+                            <span class="writing-vertical-rl text-gray-500 font-bold tracking-widest">창 문</span>
+                        </div>
+                        <div class="absolute top-12 right-0 w-14 h-28 bg-[#c19a6b] border-l-4 border-l-[#a68053] border-y-4 border-y-[#8a6842] flex items-center justify-center shadow-md z-0 rounded-l-md">
+                            <span class="writing-vertical-rl text-white font-bold text-lg">앞 문</span>
+                        </div>
+                        <div class="absolute bottom-12 right-0 w-14 h-28 bg-[#c19a6b] border-l-4 border-l-[#a68053] border-y-4 border-y-[#8a6842] flex items-center justify-center shadow-md z-0 rounded-l-md">
+                            <span class="writing-vertical-rl text-white font-bold text-lg">뒷 문</span>
+                        </div>
+
+                        <!-- 모둠 그리드 -->
+                        <div class="absolute inset-0 pt-24 pb-12 pl-20 pr-24 overflow-y-auto">
+                            <div class="grid ${gridCols} gap-6 md:gap-8 place-items-center h-full items-start pt-4">
+                                ${state.teams.map(team => {
+                                    const slots = state.teamSlots[team.id] || [];
+                                    return `
+                                    <div class="w-full max-w-[240px] rounded-xl shadow-lg border-2 ${team.colorObj.bg} ${team.colorObj.border} transform transition-all duration-300 hover:scale-105">
+                                        <div class="py-2 px-3 border-b border-black/10 flex justify-between items-center bg-white/30 rounded-t-lg">
+                                            <span class="font-black text-lg ${team.colorObj.text}">${team.name}</span>
+                                            <span class="text-xs font-bold px-2 py-1 rounded-full bg-white/50 ${team.colorObj.text}">${slots.length}명</span>
+                                        </div>
+                                        <div class="p-3 grid grid-cols-2 gap-2">
+                                            ${slots.map((slot, index) => {
+                                                const sNum = index + 1;
+                                                const outOfBoundsMovers = state.selectedMovers.filter(m => m > slots.length);
+                                                const isSelectedSeat = state.selectedMovers.includes(sNum) || outOfBoundsMovers.some(m => state.fallbackMovers[m] === sNum);
+                                                const occupant = slot.student;
+                                                const isVisitor = occupant.originalTeamId !== team.id;
+                                                const visitorTeamName = isVisitor ? state.teams.find(t=>t.id === occupant.originalTeamId)?.name.replace('팀','') : '';
+                                                
+                                                const selectedClass = isSelectedSeat ? 'ring-4 ring-indigo-500 ring-offset-2 ring-offset-transparent scale-95 z-10' : '';
+                                                
+                                                return `
+                                                <div class="relative aspect-[4/3] rounded-lg shadow-sm border-2 flex flex-col items-center justify-center overflow-hidden transition-all duration-500 ${occupant.colorObj.bg} ${occupant.colorObj.border} ${selectedClass}">
+                                                    <div class="absolute top-1 left-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white/90 flex items-center justify-center text-[9px] sm:text-[10px] font-black text-gray-600 shadow-sm z-10">
+                                                        ${sNum}
+                                                    </div>
+                                                    <div class="flex-1 flex flex-col items-center justify-center w-full px-1 pt-3 sm:pt-4 min-h-0">
+                                                        ${isVisitor ? `<span class="text-[9px] sm:text-[10px] md:text-xs font-bold text-black/50 leading-none mb-0.5 sm:mb-1 whitespace-nowrap w-full text-center truncate">from ${visitorTeamName}</span>` : ''}
+                                                        <span class="text-sm sm:text-base md:text-lg lg:text-xl font-black ${occupant.colorObj.text} leading-tight text-center tracking-tight w-full flex items-center justify-center" style="word-break: keep-all;">
+                                                            ${occupant.name}
+                                                        </span>
+                                                    </div>
+                                                    ${isVisitor ? `<div class="absolute -bottom-3 -right-3 w-6 h-6 sm:-bottom-4 sm:-right-4 sm:w-8 sm:h-8 bg-black/10 rotate-45 z-0"></div>` : ''}
+                                                </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
+        // ==========================================
+        // 5. 앱 초기화 (Init)
+        // ==========================================
+        function initApp() {
+            loadPresets();
+            syncTeams();
+            renderApp();
+        }
+
+        // 앱 실행
+        initApp();
+
+    </script>
+</body>
+</html>
